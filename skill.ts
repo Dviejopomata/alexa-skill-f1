@@ -1,7 +1,10 @@
+import forge = require("node-forge")
 import express = require("express")
+import url = require("url")
 import _ = require("lodash")
 import bodyParser = require("body-parser")
 import { AddressInfo } from "net"
+import axios from "axios"
 import {
   ErrorHandler,
   HandlerInput,
@@ -42,7 +45,7 @@ const LaunchRequestHandler: RequestHandler = {
   },
   handle(handlerInput: HandlerInput): Response {
     const speechText =
-      "Bienvenido a formulauno, preguntame sobre alguna curiosidad de la formula 1!"
+      "Bienvenido a formulauno, pregúnteme sobre alguna curiosidad de la formula 1!"
 
     return handlerInput.responseBuilder
       .speak(speechText)
@@ -150,13 +153,55 @@ const handler = skillBuilder
   )
   .create()
 const expressApp = express()
-
-expressApp.use(bodyParser.json(), async (req, res, next) => {
+expressApp.use(bodyParser.raw({ type: () => true }), async (req, res, next) => {
   try {
-    console.log(req.url)
-    console.log(req.body)
+    const signature = req.headers["signature"] as string
 
-    const response = await handler.invoke(req.body)
+    const certUrl = req.headers["signaturecertchainurl"] as string
+    if (!signature || certUrl) {
+      res.status(400)
+      res.json({
+        message: "Signature or certurl are missing",
+      })
+      return
+    }
+    const { host, protocol, pathname } = url.parse(certUrl)
+    if (
+      host !== "s3.amazonaws.com" ||
+      protocol !== "https:" ||
+      (!pathname || !pathname.startsWith("/echo.api"))
+    ) {
+      res.status(500)
+      res.json({
+        message: "Invalid certurl",
+      })
+      return
+    }
+
+    const { data: cert } = await axios.get<string>(certUrl as string)
+    const CERTS_SEPARATOR = "-----END CERTIFICATE-----"
+    const certs = cert.split("-----END CERTIFICATE-----")
+    const amazonSigningCert = `${certs[0]}${CERTS_SEPARATOR}`
+    var x509 = forge.pki.certificateFromPem(amazonSigningCert)
+
+    const sha1 = forge.md.sha1.create()
+    sha1.update(req.body)
+
+    var verified = x509.publicKey.verify(
+      sha1.digest().getBytes(),
+      Buffer.from(signature, "base64"),
+    )
+    if (!verified) {
+      res.status(500)
+      res.send({
+        message: "Signature doesn't match",
+      })
+      return
+    }
+
+    const response = await handler.invoke(
+      JSON.parse(req.body.toString("utf-8")),
+    )
     res.json(response)
   } catch (error) {
     next(error)
