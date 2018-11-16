@@ -1,3 +1,4 @@
+import morgan = require("morgan")
 import forge = require("node-forge")
 import express = require("express")
 import url = require("url")
@@ -153,15 +154,19 @@ const handler = skillBuilder
   )
   .create()
 const expressApp = express()
+expressApp.use(morgan("combined"))
 expressApp.use(bodyParser.raw({ type: () => true }), async (req, res, next) => {
   try {
     const signature = req.headers["signature"] as string
 
     const certUrl = req.headers["signaturecertchainurl"] as string
     if (!signature || certUrl) {
+      const message = "Signature or certurl are missing"
+      console.log(message)
+
       res.status(400)
       res.json({
-        message: "Signature or certurl are missing",
+        message,
       })
       return
     }
@@ -192,9 +197,11 @@ expressApp.use(bodyParser.raw({ type: () => true }), async (req, res, next) => {
       Buffer.from(signature, "base64"),
     )
     if (!verified) {
+      const message = "Signature doesn't match"
+      console.log(message)
       res.status(500)
       res.send({
-        message: "Signature doesn't match",
+        message,
       })
       return
     }
