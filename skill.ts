@@ -160,7 +160,7 @@ expressApp.use(bodyParser.raw({ type: () => true }), async (req, res, next) => {
     const signature = req.headers["signature"] as string
 
     const certUrl = req.headers["signaturecertchainurl"] as string
-    if (!signature || certUrl) {
+    if (!signature || !certUrl) {
       const message = "Signature or certurl are missing"
       console.log(message)
 
