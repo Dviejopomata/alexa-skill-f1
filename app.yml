@@ -1,0 +1,19 @@
+app: alexa-skill-f1
+
+dependencies: {}
+
+handlers:
+  api:
+    file: Dockerfile
+    url: /
+
+environments:
+  - name: prod
+    type: kubernetes
+    domain: formula1.alexa.nextagilesoft.com
+    repository: git@gitlab.nextagilesoft.com:dviejo/alexa-skill-f1.git
+    cluster: animal
+    env_variables:
+    - name: NODE_ENV
+      value: production
+
